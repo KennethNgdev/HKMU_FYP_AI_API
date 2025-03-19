@@ -11,7 +11,7 @@ UPLOAD_FOLDER = 'temp'
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
-transcriptor = PianoTranscription(device='cpu')    # 'cuda' | 'cpu'
+transcriptor = PianoTranscription(checkpoint_path="model_weight.pth", device='cpu')    # 'cuda' | 'cpu'
 
 @app.route('/transcribe', methods=['POST'])
 def transcribe():
