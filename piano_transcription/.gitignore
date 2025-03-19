@@ -1,0 +1,10 @@
+*
+!*/
+!*.*
+*.hdf5
+*.pyc
+__pycache__
+.venv
+.vscode
+.venv/*
+.model_weight.pth

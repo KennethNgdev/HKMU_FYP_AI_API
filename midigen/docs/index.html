@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <script src="https://cdn.jsdelivr.net/combine/npm/tone@14.7.58,npm/@magenta/music@1.23.1/es6/core.js,npm/focus-visible@5,npm/html-midi-player@1.5.0"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <script>hljs.initHighlightingOnLoad();</script>
+    <link rel="stylesheet"
+      href="https://cifkao.github.io/html-midi-player/assets/css/style.css">
+    <link rel="stylesheet"
+      href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github.min.css">
+    <link rel="stylesheet" href="style.css"
+  </head>
+  <body>
+    <div style="width:90%;margin:auto">
+      <div
+        style="grid;float:right"
+        columns="25% 25% 25% 25%"
+      >
+        <img src="https://img.shields.io/github/license/dbjohnson/midigen.svg"/>
+        <img src="https://img.shields.io/pypi/v/midigen.svg"/>
+        <img src="https://github.com/dbjohnson/midigen/actions/workflows/tests.yml/badge.svg"/>
+        <a href="https://github.com/dbjohnson/midigen" target="_blank">
+          <img src="github.svg" style="height:40px">
+        </a>
+      </div>
+      <h1>midigen</h1>
+      <p>Easily generate simple midi backing tracks with matched chord voicings, swing, and randomization.  Note sequences are generated via Markov chain.</p>
+
+      <h3>example output</h3>
+      <div>
+        <midi-visualizer type="piano-roll" id="mainVisualizer" src="demo.mid"></midi-visualizer>
+        <midi-player
+          src="demo.mid"
+          sound-font=""
+          visualizer="#mainVisualizer"
+          id="mainPlayer"
+          loop
+        >
+      </div>
+      <div style="font-size:10pt;float:right">
+        <a href="https://github.com/cifkao/html-midi-player">html-midi-player</a>
+      </div>
+      <h3>command line tool</h3>
+      <pre><code class="Bash">midigen --key C --chords ii9 V7 I9 vi7 --loop 5 --tempo 90 --swing 0.05 -o ii-V-i-vi.mid</code></pre>
+      <h3>python</h3>
+      <pre><code class="Python">from midigen.notes import Note
+from midigen.keys import Key, Mode
+from midigen.time import TimeSignature, Measure
+from midigen.sequencer import Song, Track, open_output
+
+
+# open new midi port
+port = open_output()
+
+# play C minor scale
+Key(Note.C, Mode.Minor).to_track().play(port)
+
+# make a simple ii V I vi chord progression in the key of C
+key = Key(Note.C, Mode.Major)
+time_signature = TimeSignature(4, 4)
+tempo = 90
+progression = [2, 5, 1, 6]
+
+chords = Track.from_measures([
+    Measure.from_pattern(
+        pattern=[
+            key.relative_key(degree).chord(
+                # default chords are the base triad - try adding extensions
+                extensions=[7],
+                # pick a voicing close to the root triad
+                match_voicing=key.triad()
+            )
+        ] * time_signature.numerator,
+        time_signature=time_signature,
+        velocity=90
+    )
+    for degree in progression
+])
+
+# play to port
+chords.play(port, tempo=tempo)
+
+# write the song to a MIDI file
+Song([chords]).to_midi('midigen.mid', tempo=tempo)</code></pre>
+    </div>
+  </body>
+</html>

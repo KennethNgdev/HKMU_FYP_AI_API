@@ -1,0 +1,9 @@
+.venv/*
+.vscode/*
+.venv
+dist/*
+src/*
+midigen.egg-info
+output.mid
+requirements.txt
+
