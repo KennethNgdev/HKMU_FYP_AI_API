@@ -13,6 +13,11 @@ from util import  (
 app = Flask(__name__)
 CORS(app)
 
+app.debug = True
+
+HOST = "0.0.0.0"
+PORT = 8020
+
 # Configure upload folder and allowed extensions
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'mid', 'midi'}
@@ -25,7 +30,7 @@ def allowed_file(filename):
     """Check if the file has an allowed extension."""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-@app.route('/')
+@app.route('/test')
 def index():
     """Serve a simple HTML form for testing."""
     return render_template_string('''
@@ -186,4 +191,6 @@ def combine_midi():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host= "0.0.0.0", port= 8020, debug=True)
+    host = os.getenv('HOST', HOST)
+    port = os.getenv('PORT', PORT)
+    app.run(host= host, port = port)

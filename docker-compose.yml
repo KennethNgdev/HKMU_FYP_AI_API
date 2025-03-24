@@ -9,10 +9,10 @@ services:
     ports:
       - "8020:8020"
     volumes:
-      - ./midigen/uploads:/uploads
       - ./midigen:/app
     environment:
-      - FLASK_ENV=development
+      HOST: 0.0.0.0
+      PROT: 8020
     command: ["python", "main.py"]
 
   piano_transcription:
@@ -24,10 +24,8 @@ services:
     ports:
       - "8010:8010"
     volumes:
-      - ./piano_transcription/temp:/temp
-      - ./piano_transcription/resources:/resources
       - ./piano_transcription:/app
     environment:
-      - WORKSPACE=/workspace
-      - DATASET_DIR=/dataset
+      HOST: 0.0.0.0
+      PROT: 8010
     command: ["python", "main.py"]

@@ -8,6 +8,10 @@ import logging
 app = Flask(__name__)
 CORS(app)
 
+app.debug = True
+
+HOST = "0.0.0.0"
+PORT = 8010
 
 UPLOAD_FOLDER = 'temp'
 if not os.path.exists(UPLOAD_FOLDER):
@@ -69,4 +73,6 @@ def transcribe():
         return f'Error during transcription: {str(e)}', 500
 
 if __name__ == '__main__':
-    app.run(host= "0.0.0.0", port=8010, debug=True)
+    host = os.getenv('HOST', HOST)
+    port = int(os.getenv('PORT', PORT))
+    app.run(host=host, port=port)
