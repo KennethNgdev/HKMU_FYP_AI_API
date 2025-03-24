@@ -5,5 +5,4 @@ dist/*
 src/*
 midigen.egg-info
 output.mid
-requirements.txt
 
