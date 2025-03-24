@@ -1,0 +1,33 @@
+services:
+  midigen:
+  
+    container_name: fyp-midigen-container
+    image: fyp-midigen-image
+    build:
+      context: ./midigen
+      dockerfile: Dockerfile
+    ports:
+      - "8020:8020"
+    volumes:
+      - ./midigen/uploads:/uploads
+      - ./midigen:/app
+    environment:
+      - FLASK_ENV=development
+    command: ["python", "main.py"]
+
+  piano_transcription:
+    container_name: fyp-piano-transcription-container
+    image: fyp-piano-transcription-image
+    build:
+      context: ./piano_transcription
+      dockerfile: Dockerfile
+    ports:
+      - "8010:8010"
+    volumes:
+      - ./piano_transcription/temp:/temp
+      - ./piano_transcription/resources:/resources
+      - ./piano_transcription:/app
+    environment:
+      - WORKSPACE=/workspace
+      - DATASET_DIR=/dataset
+    command: ["python", "main.py"]
