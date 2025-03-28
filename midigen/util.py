@@ -203,6 +203,21 @@ def apply_volume_to_midi(midi_obj: pretty_midi.PrettyMIDI, volume: int):
         for note in instrument.notes:
             note.velocity = volume
 
+def transpose_midi(midi_obj: pretty_midi.PrettyMIDI, semitones: int):
+    """
+    將 MIDI 物件中所有非打擊樂器（is_drum == False）的音符調整指定的半音數。
+    
+    Args:
+        midi_obj: 待調整的 PrettyMIDI 物件
+        semitones: 整數，正值表示上移，負值表示下移
+    """
+    for instrument in midi_obj.instruments:
+        # 如果不是 percussion, 才做調整
+        if not instrument.is_drum:
+            for note in instrument.notes:
+                new_pitch = note.pitch + semitones
+                # 防止超出 MIDI 音高有效範圍 (0 ~ 127)
+                note.pitch = max(0, min(new_pitch, 127))
 
 def combine_midis(original_midi_file: str, chord_midi: pretty_midi.PrettyMIDI, output_file: str):
     """
@@ -248,9 +263,17 @@ def main():
     measures = generate_chord_measures(detected_key, mode_str, progression, time_sig, tempo, repeats)
     
     # 此後流程不變
+    # 生成和弦 MIDI 物件
     chord_midi_object = create_chord_midi_from_measures(measures, tempo)
+
+    # 計算原始 MIDI 的平均音量，再將和弦音量調整為相同數值
     desired_volume = compute_average_velocity(input_midi_file)
     apply_volume_to_midi(chord_midi_object, desired_volume)
+
+    # 每將和弦下降1個八度，即向下移動12個半音
+    transpose_midi(chord_midi_object, -24)
+
+    # 合併 MIDI 文件
     combine_midis(input_midi_file, chord_midi_object, output_file)
 
 if __name__ == "__main__":
