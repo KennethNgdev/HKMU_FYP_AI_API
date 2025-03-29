@@ -133,8 +133,9 @@ def generate_chord_measures(
     repeats: int
 ):
     """
-    根據設定生成和弦的 Measure 列表
+    根據設定生成和弦的 Measure 列表。
     每個 Measure 代表一小節的和弦，內部每個和弦的時值由 time_sig 決定。
+    當 progression 中出現 0 時，表示此小節為停頓，生成 dummy 和弦（以 -1 表示）。
     """
     note_obj = note_from_string(key_str)
     mode_obj = parse_mode(mode_str)
@@ -144,13 +145,18 @@ def generate_chord_measures(
     measures = []
     for _ in range(repeats):
         for degree in progression:
-            chord = key_obj.relative_key(degree).chord()
+            if degree == 0:
+                # 使用 [0] 表示停頓，0 為合法值
+                chord = [0]
+            else:
+                chord = key_obj.relative_key(degree).chord()
             measure = Measure.from_pattern(
                 pattern=[chord] * time_signature.numerator,
                 time_signature=time_signature
             )
             measures.append(measure)
     return measures
+
 
 
 def create_chord_midi_from_measures(measures, tempo: int) -> pretty_midi.PrettyMIDI:
@@ -170,24 +176,38 @@ def create_chord_midi_from_measures(measures, tempo: int) -> pretty_midi.PrettyM
     return midi_object
 
 
+def mark_dummy_notes(midi_obj: pretty_midi.PrettyMIDI):
+    for instrument in midi_obj.instruments:
+        if instrument.is_drum:
+            continue
+        for note in instrument.notes:
+            if note.pitch == 0:
+                note._dummy = True
+
+
 def apply_volume_to_midi(midi_obj: pretty_midi.PrettyMIDI, volume: int):
     """
-    調整所有音符的 velocity 為指定值
+    調整所有音符的 velocity 為指定值，dummy note 保持原狀。
     """
     for instrument in midi_obj.instruments:
         for note in instrument.notes:
+            if hasattr(note, "_dummy") and note._dummy:
+                continue
             note.velocity = volume
 
 
 def transpose_midi(midi_obj: pretty_midi.PrettyMIDI, semitones: int):
     """
-    將所有非打擊樂器的音符轉調指定的半音數。
+    將所有非打擊樂器的音符轉調指定的半音數，跳過 dummy note。
     """
     for instrument in midi_obj.instruments:
-        if not instrument.is_drum:
-            for note in instrument.notes:
-                new_pitch = note.pitch + semitones
-                note.pitch = max(0, min(new_pitch, 127))
+        if instrument.is_drum:
+            continue
+        for note in instrument.notes:
+            if hasattr(note, "_dummy") and note._dummy:
+                continue
+            new_pitch = note.pitch + semitones
+            note.pitch = max(0, min(new_pitch, 127))
 
 
 def combine_midis(original_midi_file: str, chord_midi: pretty_midi.PrettyMIDI, output_file: str):
@@ -210,6 +230,7 @@ def get_fixed_beat_duration(time_sig: tuple) -> float:
     根據時間簽名返回固定的每拍持續時間（秒）。
     例如：
       4/4 拍：返回 0.5 秒/拍
+      3/4 拍：返回 0.66 秒/拍
       2/4 拍：返回 1.0 秒/拍
     若有其它時間簽名，可根據需要添加對應邏輯，這裡默認返回 0.5 秒。
     """
@@ -226,12 +247,13 @@ def get_fixed_beat_duration(time_sig: tuple) -> float:
 
 def adjust_chord_duration_fixed(midi_obj: pretty_midi.PrettyMIDI, beat_duration: float):
     """
-    將和弦 MIDI 中所有非打擊樂器的音符持續時間固定爲 beat_duration（秒）。
+    將和弦 MIDI 中所有非打擊樂器的音符持續時間固定為 beat_duration（秒）。
     """
     for instrument in midi_obj.instruments:
         if not instrument.is_drum:
             for note in instrument.notes:
                 note.end = note.start + beat_duration
+
 
 def connect_chord_notes_grouped(midi_obj: pretty_midi.PrettyMIDI, tolerance: float = 0.001):
     """
@@ -242,10 +264,7 @@ def connect_chord_notes_grouped(midi_obj: pretty_midi.PrettyMIDI, tolerance: flo
     for instrument in midi_obj.instruments:
         if instrument.is_drum:
             continue
-        # 按 start 排序
         instrument.notes.sort(key=lambda note: note.start)
-        
-        # 將音符按照 start 聚類
         groups = []
         current_group = [instrument.notes[0]]
         for note in instrument.notes[1:]:
@@ -255,16 +274,13 @@ def connect_chord_notes_grouped(midi_obj: pretty_midi.PrettyMIDI, tolerance: flo
                 groups.append(current_group)
                 current_group = [note]
         groups.append(current_group)
-        
-        # 依序調整各組之間的銜接，保證每一組開頭與前一組結束銜接
         for i in range(1, len(groups)):
-            # 找到前一組中的最新結束時間
-            prev_group_end = max(n.end for n in groups[i-1])
-            # 計算后一組原有的時長（以每個音符為準）
+            prev_group_end = max(n.end for n in groups[i - 1])
             for note in groups[i]:
                 duration = note.end - note.start
                 note.start = prev_group_end
                 note.end = note.start + duration
+
 
 def main():
     # 原始 MIDI 文件
@@ -272,9 +288,10 @@ def main():
     output_file = "combined_output.mid"
     detected_key = get_midi_key(input_midi_file, default_key="C")
     mode_str = "Major"          # 使用大調
-    progression = [2, 5, 1, 6]  # 和弦進行：ii-V-I-vi
+    # 進行中 0 表示停頓，例如 (2, 5, 0, 1) 表示 ii-V-停頓-I
+    progression = [2, 5, 0, 1]
     time_sig = (4, 4)           # 設定節拍
-    default_tempo = 90  # 這裡 tempo 只用於生成 MIDI 時標記，不影響和弦時長的固定計算
+    default_tempo = 90  # 此 tempo 僅用於生成 MIDI 時的標記，不影響和弦時長的固定計算
 
     try:
         tempo, duration = get_midi_info(input_midi_file)
@@ -284,29 +301,32 @@ def main():
         tempo = default_tempo
         duration = 60
 
-    # 使用固定拍子來計算和弦長度
     beat_duration = get_fixed_beat_duration(time_sig)
     measure_length = time_sig[0] * beat_duration  # 例如在 4/4 拍中：4 * 0.5 = 2.0 秒/小節
     total_measures_needed = math.ceil(duration / measure_length)
     repeats = math.ceil(total_measures_needed / len(progression))
-    
-    # 生成和弦 measures（基於調性、進行和時間簽名）
+
+    # 生成和弦 measures（保留原進行順序，0 表示停頓）
     measures = generate_chord_measures(detected_key, mode_str, progression, time_sig, tempo, repeats)
-    
+
     # 生成和弦 MIDI 物件
     chord_midi_object = create_chord_midi_from_measures(measures, tempo)
 
-    # 將和弦音量調整爲與原始 MIDI 平均音量相同
+    # 標記 dummy note（停頓）— 其 pitch 為 0 的 note
+    mark_dummy_notes(chord_midi_object)
+
+    # 將和弦音量調整為與原始 MIDI 平均音量相同，
+    # dummy note 不作調整
     desired_volume = compute_average_velocity(input_midi_file)
     apply_volume_to_midi(chord_midi_object, desired_volume)
 
     # 固定每個和弦持續時間為計算得到的 beat_duration（不依賴 BPM）
     adjust_chord_duration_fixed(chord_midi_object, beat_duration)
 
-    # 無條件調整，使每個和弦的開始時間緊接前一和弦的結束時間
+    # 將各和弦無縫連接，dummy note 保持在原位置
     connect_chord_notes_grouped(chord_midi_object)
 
-    # 將和弦整體轉調（例如下降兩個八度，-24 半音）
+    # 將和弦整體轉調（例如下降兩個八度，-24 半音）；dummy note 保持不變
     transpose_midi(chord_midi_object, -24)
 
     # 合併原始 MIDI 與和弦 MIDI，生成最終文件
