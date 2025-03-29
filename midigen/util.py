@@ -60,18 +60,13 @@ def get_midi_info(input_midi_file: str):
     except Exception as e:
         raise RuntimeError(f"讀取 MIDI 文件出錯: {e}")
 
+
 def get_midi_key(input_midi_file: str, default_key: str = "C") -> str:
     """
     嘗試從 MIDI 文件中讀取 Key Signature 事件，
     並根據 key_number 返回一個調性字串。
     如果沒有找到，則返回 default_key 參數指定的預設值。
-    
-    pretty_midi 中的 key_signature_changes 屬性返回的 Event
-    通常包含 key_number 屬性，範圍約在 -7 到 7：
-      - 正數代表升號數量 (例如 1 -> G 大調、2 -> D 大調)
-      - 負數代表降號數量 (例如 -1 -> F 大調、-2 -> Bb 大調)
     """
-    import pretty_midi
     try:
         midi_data = pretty_midi.PrettyMIDI(input_midi_file)
     except Exception as e:
@@ -79,9 +74,7 @@ def get_midi_key(input_midi_file: str, default_key: str = "C") -> str:
         return default_key
 
     if midi_data.key_signature_changes:
-        # 取第一個 key signature 事件作為代表
-        ks = midi_data.key_signature_changes[0]
-        # 建立一個映射（這裡只考慮大調的情況）
+        ks = midi_data.key_signature_changes[0]  # 使用第一個 key signature 事件
         mapping = {
             0: "C",
             1: "G",
@@ -105,6 +98,7 @@ def get_midi_key(input_midi_file: str, default_key: str = "C") -> str:
     else:
         print(f"MIDI 中未找到 Key Signature 事件，預設使用 {default_key} 調")
         return default_key
+
 
 def compute_average_velocity(input_midi_file: str) -> int:
     """
@@ -140,17 +134,7 @@ def generate_chord_measures(
 ):
     """
     根據設定生成和弦的 Measure 列表
-    
-    Args:
-        key_str: 例如 "C"
-        mode_str: 調式（例如 "Major" 或 "Minor"）
-        progression: 和弦進行列表（例如 [2, 5, 1, 6]）
-        time_sig: 節拍（例如 (4, 4)）
-        tempo: BPM
-        repeats: 重複和弦進行的次數
-        
-    Returns:
-        一組 Measure，每個 Measure 代表一小節的和弦
+    每個 Measure 代表一小節的和弦，內部每個和弦的時值由 time_sig 決定。
     """
     note_obj = note_from_string(key_str)
     mode_obj = parse_mode(mode_str)
@@ -172,8 +156,7 @@ def generate_chord_measures(
 def create_chord_midi_from_measures(measures, tempo: int) -> pretty_midi.PrettyMIDI:
     """
     利用生成的 measures 建立和弦軌道並返回 PrettyMIDI 物件。
-    
-    此函式使用暫存檔案方式進行 MIDI 輸出與讀取，從而取得 PrettyMIDI 物件。
+    此函式利用暫存檔輸出與讀取 MIDI 文件。
     """
     chords_track = Track.from_measures(measures)
     song = Song([chords_track])
@@ -181,71 +164,117 @@ def create_chord_midi_from_measures(measures, tempo: int) -> pretty_midi.PrettyM
     with tempfile.NamedTemporaryFile(suffix=".mid", delete=False) as tmp:
         tmp_filename = tmp.name
 
-    # 將 Song 導出為 MIDI 文件
     song.to_midi(tmp_filename, tempo=tempo)
-    
-    # 讀取該 MIDI 輸出文件以獲取 PrettyMIDI 對象
     midi_object = pretty_midi.PrettyMIDI(tmp_filename)
-    
     os.remove(tmp_filename)
     return midi_object
 
 
 def apply_volume_to_midi(midi_obj: pretty_midi.PrettyMIDI, volume: int):
     """
-    動態調整 MIDI 物件內所有音符的音量（velocity）。
-    
-    Args:
-        midi_obj: 待調整的 PrettyMIDI 物件
-        volume: 整數值，建議介於 0 到127 之間
+    調整所有音符的 velocity 為指定值
     """
     for instrument in midi_obj.instruments:
         for note in instrument.notes:
             note.velocity = volume
 
+
 def transpose_midi(midi_obj: pretty_midi.PrettyMIDI, semitones: int):
     """
-    將 MIDI 物件中所有非打擊樂器（is_drum == False）的音符調整指定的半音數。
-    
-    Args:
-        midi_obj: 待調整的 PrettyMIDI 物件
-        semitones: 整數，正值表示上移，負值表示下移
+    將所有非打擊樂器的音符轉調指定的半音數。
     """
     for instrument in midi_obj.instruments:
-        # 如果不是 percussion, 才做調整
         if not instrument.is_drum:
             for note in instrument.notes:
                 new_pitch = note.pitch + semitones
-                # 防止超出 MIDI 音高有效範圍 (0 ~ 127)
                 note.pitch = max(0, min(new_pitch, 127))
+
 
 def combine_midis(original_midi_file: str, chord_midi: pretty_midi.PrettyMIDI, output_file: str):
     """
-    將原始 MIDI 文件（來自 piano_transcription）與生成的和弦 MIDI 合併，
-    並將最終結果寫入 output_file 中。
+    合併原始 MIDI 文件與生成的和弦 MIDI，寫入 output_file 中。
     """
     try:
         original_midi = pretty_midi.PrettyMIDI(original_midi_file)
     except Exception as e:
         raise RuntimeError(f"讀取原始 MIDI 文件出錯: {e}")
 
-    # 將 chord_midi 中所有樂器的音軌添加到原始 MIDI 中
     for instrument in chord_midi.instruments:
         original_midi.instruments.append(instrument)
-
     original_midi.write(output_file)
     print(f"合併後的 MIDI 文件已生成：{output_file}")
 
+
+def get_fixed_beat_duration(time_sig: tuple) -> float:
+    """
+    根據時間簽名返回固定的每拍持續時間（秒）。
+    例如：
+      4/4 拍：返回 0.5 秒/拍
+      2/4 拍：返回 1.0 秒/拍
+    若有其它時間簽名，可根據需要添加對應邏輯，這裡默認返回 0.5 秒。
+    """
+    numerator, denominator = time_sig
+    if time_sig == (4, 4):
+        return 0.5
+    elif time_sig == (3, 4):
+        return 0.66
+    elif time_sig == (2, 4):
+        return 1.0
+    else:
+        return 0.5  # 默認值，可根據需要調整
+
+
+def adjust_chord_duration_fixed(midi_obj: pretty_midi.PrettyMIDI, beat_duration: float):
+    """
+    將和弦 MIDI 中所有非打擊樂器的音符持續時間固定爲 beat_duration（秒）。
+    """
+    for instrument in midi_obj.instruments:
+        if not instrument.is_drum:
+            for note in instrument.notes:
+                note.end = note.start + beat_duration
+
+def connect_chord_notes_grouped(midi_obj: pretty_midi.PrettyMIDI, tolerance: float = 0.001):
+    """
+    根據起始時間將音符分組，同一組的音符不進行調整。
+    對於相鄰組別，無條件將后一組的所有音符的起始時間設置為前一組中最晚的結束時間，
+    並保留原有的持續時間。
+    """
+    for instrument in midi_obj.instruments:
+        if instrument.is_drum:
+            continue
+        # 按 start 排序
+        instrument.notes.sort(key=lambda note: note.start)
+        
+        # 將音符按照 start 聚類
+        groups = []
+        current_group = [instrument.notes[0]]
+        for note in instrument.notes[1:]:
+            if abs(note.start - current_group[0].start) <= tolerance:
+                current_group.append(note)
+            else:
+                groups.append(current_group)
+                current_group = [note]
+        groups.append(current_group)
+        
+        # 依序調整各組之間的銜接，保證每一組開頭與前一組結束銜接
+        for i in range(1, len(groups)):
+            # 找到前一組中的最新結束時間
+            prev_group_end = max(n.end for n in groups[i-1])
+            # 計算后一組原有的時長（以每個音符為準）
+            for note in groups[i]:
+                duration = note.end - note.start
+                note.start = prev_group_end
+                note.end = note.start + duration
 
 def main():
     # 原始 MIDI 文件
     input_midi_file = "Twinkle twinkle little star.mid"
     output_file = "combined_output.mid"
-    detected_key = get_midi_key(input_midi_file, default_key="C")       # 如果你希望變更預設的和弦key，只需要在調用時指定default_key的值
-    mode_str = "Major"     # 這裡可以自由設定，大部分情況下如果是大調，選擇 "Major"
-    progression = [2, 5, 1, 6]      # ii-V-I-vi
-    time_sig = (4, 4)
-    default_tempo = 90
+    detected_key = get_midi_key(input_midi_file, default_key="C")
+    mode_str = "Major"          # 使用大調
+    progression = [2, 5, 1, 6]  # 和弦進行：ii-V-I-vi
+    time_sig = (4, 4)           # 設定節拍
+    default_tempo = 90  # 這裡 tempo 只用於生成 MIDI 時標記，不影響和弦時長的固定計算
 
     try:
         tempo, duration = get_midi_info(input_midi_file)
@@ -255,27 +284,34 @@ def main():
         tempo = default_tempo
         duration = 60
 
-    measure_length = (time_sig[0] * 60) / tempo
+    # 使用固定拍子來計算和弦長度
+    beat_duration = get_fixed_beat_duration(time_sig)
+    measure_length = time_sig[0] * beat_duration  # 例如在 4/4 拍中：4 * 0.5 = 2.0 秒/小節
     total_measures_needed = math.ceil(duration / measure_length)
     repeats = math.ceil(total_measures_needed / len(progression))
     
-    # 運用動態獲得的調性 － detected_key
+    # 生成和弦 measures（基於調性、進行和時間簽名）
     measures = generate_chord_measures(detected_key, mode_str, progression, time_sig, tempo, repeats)
     
-    # 此後流程不變
     # 生成和弦 MIDI 物件
     chord_midi_object = create_chord_midi_from_measures(measures, tempo)
 
-    # 計算原始 MIDI 的平均音量，再將和弦音量調整為相同數值
+    # 將和弦音量調整爲與原始 MIDI 平均音量相同
     desired_volume = compute_average_velocity(input_midi_file)
     apply_volume_to_midi(chord_midi_object, desired_volume)
 
-    # 每將和弦下降1個八度，即向下移動12個半音
+    # 固定每個和弦持續時間為計算得到的 beat_duration（不依賴 BPM）
+    adjust_chord_duration_fixed(chord_midi_object, beat_duration)
+
+    # 無條件調整，使每個和弦的開始時間緊接前一和弦的結束時間
+    connect_chord_notes_grouped(chord_midi_object)
+
+    # 將和弦整體轉調（例如下降兩個八度，-24 半音）
     transpose_midi(chord_midi_object, -24)
 
-    # 合併 MIDI 文件
+    # 合併原始 MIDI 與和弦 MIDI，生成最終文件
     combine_midis(input_midi_file, chord_midi_object, output_file)
+
 
 if __name__ == "__main__":
     main()
-    
