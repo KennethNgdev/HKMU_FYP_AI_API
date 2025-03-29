@@ -281,6 +281,13 @@ def connect_chord_notes_grouped(midi_obj: pretty_midi.PrettyMIDI, tolerance: flo
                 note.start = prev_group_end
                 note.end = note.start + duration
 
+def remove_dummy_notes(midi_obj: pretty_midi.PrettyMIDI):
+    """
+    從 MIDI 物件中移除所有被標記爲 dummy 的音符，
+    這樣 dummy note 就不會出現在最終輸出的 MIDI 文件或樂譜中。
+    """
+    for instrument in midi_obj.instruments:
+        instrument.notes = [note for note in instrument.notes if not (hasattr(note, '_dummy') and note._dummy)]
 
 def main():
     # 原始 MIDI 文件
@@ -328,6 +335,9 @@ def main():
 
     # 將和弦整體轉調（例如下降兩個八度，-24 半音）；dummy note 保持不變
     transpose_midi(chord_midi_object, -24)
+
+    # 移除dummy note，這樣它們不會顯示在樂譜中
+    remove_dummy_notes(chord_midi_object)
 
     # 合併原始 MIDI 與和弦 MIDI，生成最終文件
     combine_midis(input_midi_file, chord_midi_object, output_file)
