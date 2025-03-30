@@ -290,12 +290,12 @@ def remove_dummy_notes(midi_obj: pretty_midi.PrettyMIDI):
 
 def main():
     # 原始 MIDI 文件
-    input_midi_file = "Mary has a little lamp.mid"
+    input_midi_file = "Twinkle twinkle little star.mid"
     output_file = "combined_output.mid"
     detected_key = get_midi_key(input_midi_file, default_key="C")
     mode_str = "Major"          # 使用大調
     # 進行中 0 表示停頓，例如 (2, 5, 0, 1) 表示 ii-V-停頓-I
-    progression = [1, 5, 4, 5]
+    progression = [1, 2, 5, 3]
     time_sig = (2, 4)           # 設定節拍，1/4 = 一個和弦一拍，2/4 = 一個小節兩個重複的和弦，3/4 = 一個小節三個重複的和弦， 4/4 = 一個小節四個重複的和弦
     default_tempo = 90  # 此 tempo 僅用於生成 MIDI 時的標記，不影響和弦時長的固定計算
 
@@ -323,7 +323,7 @@ def main():
 
     # 將和弦音量調整為與原始 MIDI 平均音量相同，
     # dummy note 不作調整
-    desired_volume = compute_average_velocity(input_midi_file) * 0.7 #volume control
+    desired_volume = math.floor(compute_average_velocity(input_midi_file) * 0.7) #volume control
     apply_volume_to_midi(chord_midi_object, desired_volume)
 
     # 固定每個和弦持續時間為計算得到的 beat_duration（不依賴 BPM）
