@@ -1,10 +1,10 @@
 # Ignore the .vscode folder
 .vscode/
-<<<<<<< HEAD
 **/__pycache__/
 midigen/__pycache__/*
-=======
 # Ignore midi files
-*.midi
+**/*.mid
+**/*.midi
+**/*.wav
+.mid
 *.mid
->>>>>>> Tim's_update_algorithm

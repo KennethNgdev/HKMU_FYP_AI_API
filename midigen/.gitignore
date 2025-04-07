@@ -11,3 +11,6 @@ output.mid
 __pycache__/*
 __pycache__
 midigen/__pycache__/*
+**/*.mid
+**/*.midi
+**/*.wav

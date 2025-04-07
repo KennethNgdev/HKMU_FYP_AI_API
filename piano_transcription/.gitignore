@@ -5,10 +5,7 @@ __pycache__
 .vscode
 .venv/*
 *.pth
-<<<<<<< HEAD
 **/__pycache__/
-=======
-*.midi
-*.mid
-*.wav
->>>>>>> Tim's_update_algorithm
+**/*.mid
+**/*.midi
+**/*.wav
