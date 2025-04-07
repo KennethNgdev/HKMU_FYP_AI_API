@@ -1,2 +1,4 @@
 # Ignore the .vscode folder
 .vscode/
+**/__pycache__/
+midigen/__pycache__/*
