@@ -7,7 +7,9 @@ import os
 from util import  (
     get_midi_key, get_midi_info, generate_chord_measures,
     create_chord_midi_from_measures, compute_average_velocity,
-    apply_volume_to_midi, combine_midis
+    apply_volume_to_midi, combine_midis, get_fixed_beat_duration,
+    mark_dummy_notes, adjust_chord_duration_fixed,
+    connect_chord_notes_grouped, transpose_midi, remove_dummy_notes
 )
 
 app = Flask(__name__)
@@ -90,19 +92,19 @@ def index():
                     <input type="file" name="file" id="file" accept=".mid,.midi" required>
 
                     <label for="key">Key (e.g., C, D, E):</label>
-                    <input type="text" name="key" id="key" placeholder="C" default="C">
+                    <input type="text" name="key" id="key" placeholder="C" value="C">
 
                     <label for="mode">Mode (e.g., Major, Minor):</label>
-                    <input type="text" name="mode" id="mode" placeholder="Major" default="Major">
+                    <input type="text" name="mode" id="mode" placeholder="Major" value="Major">
 
-                    <label for="progression">Chord Progression (e.g., 2,5,1,6):</label>
-                    <input type="text" name="progression" id="progression" placeholder="2,5,1,6" default="2,5,1,6">
+                    <label for="progression">Chord Progression (e.g., 1, 2, 5, 3):</label>
+                    <input type="text" name="progression" id="progression" placeholder="1, 2, 5, 3" value="1, 2, 5, 3">
 
-                    <label for="time_sig">Time Signature (e.g., 4,4):</label>
-                    <input type="text" name="time_sig" id="time_sig" placeholder="4,4" default="4,4">
+                    <label for="time_sig">Time Signature (e.g., 2,4):</label>
+                    <input type="text" name="time_sig" id="time_sig" placeholder="2,4" value="2,4">
 
                     <label for="tempo">Tempo (e.g., 90):</label>
-                    <input type="text" name="tempo" id="tempo" placeholder="90" default="90"> >
+                    <input type="text" name="tempo" id="tempo" placeholder="90" value="90">
 
                     <input type="submit" value="Combine MIDI">
                 </form>
@@ -132,7 +134,7 @@ def combine_midi():
     # Get user inputs or use defaults
     key = request.form.get('key', 'C')  # Default key is 'C'
     mode_str = request.form.get('mode', 'Major')  # Default mode is 'Major'
-    progression = request.form.get('progression', '2,5,1,6')  # Default progression is '2,5,1,6'
+    progression = request.form.get('progression', '1, 2, 5, 3')  # Default progression is '2,5,1,6'
     time_sig = request.form.get('time_sig', '4,4')  # Default time signature is '4,4'
     tempo = request.form.get('tempo', '90')  # Default tempo is 90
 
@@ -161,8 +163,8 @@ def combine_midi():
             tempo = default_tempo
             duration = 60
 
-        # Calculate measures
-        measure_length = (time_sig[0] * 60) / tempo
+        beat_duration = get_fixed_beat_duration(time_sig)
+        measure_length = time_sig[0] * beat_duration  # 例如在 4/4 拍中：4 * 0.5 = 2.0 秒/小節
         total_measures_needed = math.ceil(duration / measure_length)
         repeats = math.ceil(total_measures_needed / len(progression))
 
@@ -172,9 +174,24 @@ def combine_midi():
         # Create chord MIDI object
         chord_midi_object = create_chord_midi_from_measures(measures, tempo)
 
+        # 標記 dummy note（停頓）— 其 pitch 為 0 的 note
+        mark_dummy_notes(chord_midi_object)
+
         # Adjust volume
         desired_volume = compute_average_velocity(input_midi_file)
         apply_volume_to_midi(chord_midi_object, desired_volume)
+
+        # 固定每個和弦持續時間為計算得到的 beat_duration（不依賴 BPM）
+        adjust_chord_duration_fixed(chord_midi_object, beat_duration)
+
+        # 將各和弦無縫連接，dummy note 保持在原位置
+        connect_chord_notes_grouped(chord_midi_object)
+
+        # 將和弦整體轉調（例如下降兩個八度，-24 半音）；dummy note 保持不變
+        transpose_midi(chord_midi_object, -24)
+
+        # 移除dummy note，這樣它們不會顯示在樂譜中
+        remove_dummy_notes(chord_midi_object)
 
         # Combine MIDI files
         output_file = os.path.join(app.config['UPLOAD_FOLDER'], 'combined_output.mid')

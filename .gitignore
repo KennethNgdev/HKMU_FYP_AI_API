@@ -1,2 +1,5 @@
 # Ignore the .vscode folder
 .vscode/
+# Ignore midi files
+*.midi
+*.mid
